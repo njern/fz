@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -317,13 +318,20 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 
 	var identity api.Identity
 	if err := client.Get(cmd.Context(), "/my/identity", &identity); err != nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Status:  Token is invalid or expired")
+		var apiErr *api.APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusUnauthorized {
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Status:  Token is invalid or expired")
 
-		if authStatusCheck {
-			return ErrInvalidToken
+			if authStatusCheck {
+				return ErrInvalidToken
+			}
+
+			return nil
 		}
 
-		return nil
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Status:  Authentication check failed")
+
+		return err
 	}
 
 	_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Status:  Authenticated")

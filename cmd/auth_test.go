@@ -143,6 +143,31 @@ func TestAuthStatusCheck_ReturnsErrorWhenTokenIsInvalid(t *testing.T) {
 	}
 }
 
+func TestAuthStatusCheck_ReturnsTransportErrorWhenVerificationFails(t *testing.T) {
+	srv := testEnv(t, http.NewServeMux())
+	srv.Close()
+
+	resetFlags(t, authStatusCmd)
+
+	result := executeCommand(t, "auth", "status", "--check")
+
+	if result.err == nil {
+		t.Fatal("expected transport error")
+	}
+
+	if errors.Is(result.err, ErrInvalidToken) {
+		t.Fatalf("error = %v, should not map transport failures to %v", result.err, ErrInvalidToken)
+	}
+
+	if strings.Contains(result.stderr, "Token is invalid or expired") {
+		t.Fatalf("stderr = %q", result.stderr)
+	}
+
+	if !strings.Contains(result.stderr, "Authentication check failed") {
+		t.Fatalf("stderr = %q", result.stderr)
+	}
+}
+
 func TestAuthLogout_RequiresYesWhenNonInteractive(t *testing.T) {
 	testEnv(t, http.NewServeMux())
 
