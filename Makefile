@@ -1,5 +1,6 @@
-.PHONY: build run clean lint fmt modernize test fix smoke-docs integration-test \
-	install-tools wsl check-golangci-lint check-gofumpt check-modernize check-wsl
+.PHONY: build run clean lint fmt fmt-check modernize test fix smoke-docs integration-test \
+	install-tools wsl wsl-check ci pre-commit fix-all tools-versions \
+	check-golangci-lint check-gofumpt check-modernize check-wsl
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GOLANGCI_LINT_VERSION ?= v2.11.3
@@ -58,6 +59,12 @@ install-tools:
 	go install golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@$(MODERNIZE_VERSION)
 	go install github.com/bombsimon/wsl/v5/cmd/wsl@$(WSL_VERSION)
 
+tools-versions:
+	@echo "golangci-lint $(GOLANGCI_LINT_VERSION)"
+	@echo "gofumpt $(GOFUMPT_VERSION)"
+	@echo "modernize $(MODERNIZE_VERSION)"
+	@echo "wsl $(WSL_VERSION)"
+
 lint: check-golangci-lint
 	golangci-lint run ./...
 
@@ -70,6 +77,14 @@ fix:
 fmt: check-gofumpt
 	gofumpt -l -w .
 
+fmt-check: check-gofumpt
+	@out="$$(gofumpt -l .)"; \
+	if [ -n "$$out" ]; then \
+		echo "$$out"; \
+		echo "Code is not gofumpt-formatted. Run 'make fmt'."; \
+		exit 1; \
+	fi
+
 modernize: check-modernize
 	modernize -fix ./...
 
@@ -81,3 +96,12 @@ integration-test: build
 
 wsl: check-wsl
 	wsl --fix ./...
+
+wsl-check: check-wsl
+	go list ./... | xargs -n 1 wsl
+
+ci: lint test smoke-docs fmt-check wsl-check
+
+pre-commit: ci
+
+fix-all: fix fmt wsl
