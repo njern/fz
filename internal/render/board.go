@@ -37,6 +37,17 @@ var (
 	boardStyle  = lipgloss.NewStyle().Bold(true)
 )
 
+const (
+	BoardLaneColorMaybe    = "Blue"
+	BoardLaneColorComplete = "Gray"
+)
+
+type boardColumnView struct {
+	name      string
+	colorName string
+	cards     []api.Card
+}
+
 // BoardView renders a kanban board with columns and cards.
 func BoardView(boardName string, columns []api.Column, cards []api.Card, width int) string {
 	var maybeCards, notNowCards, doneCards []api.Card
@@ -55,36 +66,17 @@ func BoardView(boardName string, columns []api.Column, cards []api.Card, width i
 		}
 	}
 
-	type vizCol struct {
-		name      string
-		colorName string
-		cards     []api.Card
-	}
-
-	var cols []vizCol
-	if len(maybeCards) > 0 {
-		cols = append(cols, vizCol{name: "Maybe?", cards: maybeCards})
-	}
+	cols := boardLeadingColumns(maybeCards, notNowCards)
 
 	for _, col := range columns {
-		cols = append(cols, vizCol{
+		cols = append(cols, boardColumnView{
 			name:      col.Name,
 			colorName: col.Color.Name,
 			cards:     byColumn[col.ID],
 		})
 	}
 
-	if len(notNowCards) > 0 {
-		cols = append(cols, vizCol{name: "Not Now", cards: notNowCards})
-	}
-
-	if len(doneCards) > 0 {
-		cols = append(cols, vizCol{name: "Done", cards: doneCards})
-	}
-
-	if len(cols) == 0 {
-		return "No columns to display.\n"
-	}
+	cols = append(cols, boardTrailingColumns(doneCards)...)
 
 	numCols := len(cols)
 	colWidth := max((width-numCols-1)/numCols, 12)
@@ -178,6 +170,19 @@ func BoardView(boardName string, columns []api.Column, cards []api.Card, width i
 	sb.WriteString("┘\n")
 
 	return sb.String()
+}
+
+func boardLeadingColumns(maybeCards, notNowCards []api.Card) []boardColumnView {
+	return []boardColumnView{
+		{name: "Not Now", colorName: BoardLaneColorComplete, cards: notNowCards},
+		{name: "Maybe?", colorName: BoardLaneColorMaybe, cards: maybeCards},
+	}
+}
+
+func boardTrailingColumns(doneCards []api.Card) []boardColumnView {
+	return []boardColumnView{
+		{name: "Done", colorName: BoardLaneColorComplete, cards: doneCards},
+	}
 }
 
 func styleHeader(text, colorName string) string {

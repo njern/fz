@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -186,11 +187,8 @@ func runBoardView(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	params := url.Values{}
-	params.Add("board_ids[]", args[0])
-
-	var cards []api.Card
-	if err := client.GetAll(cmd.Context(), fmt.Sprintf("/%s/cards?%s", slug, params.Encode()), &cards); err != nil {
+	cards, err := fetchBoardViewCards(cmd.Context(), client, slug, args[0])
+	if err != nil {
 		return err
 	}
 
@@ -201,6 +199,36 @@ func runBoardView(cmd *cobra.Command, args []string) error {
 	_, _ = fmt.Fprint(cmd.OutOrStdout(), render.BoardView(board.Name, columns, cards, render.TerminalWidth()))
 
 	return nil
+}
+
+func fetchBoardViewCards(ctx context.Context, client *api.Client, slug, boardID string) ([]api.Card, error) {
+	indexes := []string{"", "not_now", "closed"}
+	seen := make(map[string]struct{})
+	var all []api.Card
+
+	for _, index := range indexes {
+		params := url.Values{}
+		params.Add("board_ids[]", boardID)
+		if index != "" {
+			params.Set("indexed_by", index)
+		}
+
+		var cards []api.Card
+		if err := client.GetAll(ctx, fmt.Sprintf("/%s/cards?%s", slug, params.Encode()), &cards); err != nil {
+			return nil, err
+		}
+
+		for _, card := range cards {
+			if _, ok := seen[card.ID]; ok {
+				continue
+			}
+
+			seen[card.ID] = struct{}{}
+			all = append(all, card)
+		}
+	}
+
+	return all, nil
 }
 
 func printBoardJSON(w io.Writer, board api.Board, columns []api.Column, cards []api.Card) error {
@@ -232,9 +260,8 @@ func printBoardJSON(w io.Writer, board api.Board, columns []api.Column, cards []
 		Columns []jsonColumn `json:"columns"`
 	}{Board: board}
 
-	if len(maybeCards) > 0 {
-		out.Columns = append(out.Columns, jsonColumn{Name: "Maybe?", Cards: maybeCards})
-	}
+	out.Columns = append(out.Columns, jsonColumn{Name: "Not Now", Color: render.BoardLaneColorComplete, Cards: notNowCards})
+	out.Columns = append(out.Columns, jsonColumn{Name: "Maybe?", Color: render.BoardLaneColorMaybe, Cards: maybeCards})
 
 	for _, col := range columns {
 		out.Columns = append(out.Columns, jsonColumn{
@@ -245,13 +272,7 @@ func printBoardJSON(w io.Writer, board api.Board, columns []api.Column, cards []
 		})
 	}
 
-	if len(notNowCards) > 0 {
-		out.Columns = append(out.Columns, jsonColumn{Name: "Not Now", Cards: notNowCards})
-	}
-
-	if len(doneCards) > 0 {
-		out.Columns = append(out.Columns, jsonColumn{Name: "Done", Cards: doneCards})
-	}
+	out.Columns = append(out.Columns, jsonColumn{Name: "Done", Color: render.BoardLaneColorComplete, Cards: doneCards})
 
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
