@@ -4,6 +4,8 @@
 
 It lets you work with boards, cards, columns, comments, steps, notifications, tags, users, webhooks, and raw API endpoints without leaving the terminal.
 
+![fz mascot using the CLI](fz.png)
+
 ## Features
 
 - Authenticate with Fizzy using a magic link or a personal access token
