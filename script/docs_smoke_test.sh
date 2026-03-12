@@ -10,7 +10,7 @@ if [ ! -f "$README_PATH" ]; then
 fi
 
 tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir"' EXIT
+trap 'chmod -R u+w "$tmp_dir" 2>/dev/null || true; rm -rf "$tmp_dir"' EXIT
 
 export HOME="$tmp_dir/home"
 export XDG_CONFIG_HOME="$tmp_dir/xdg"
