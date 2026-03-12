@@ -251,6 +251,6 @@ make integration-test
 
 `make smoke-docs` executes the `smoke-docs` code blocks in this README in an isolated temporary home directory.
 
-`make integration-test` expects a working Fizzy environment with valid credentials and account access already configured.
+`make integration-test` expects a working Fizzy environment with valid credentials and account access already configured. The suite may temporarily leave an unused tag behind until Fizzy's daily server-side tag cleanup runs.
 
 Use `fz --help` or `fz <command> --help` for the full command reference.
