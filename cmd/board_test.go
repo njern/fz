@@ -263,6 +263,7 @@ func TestBoardView_JSON_FetchesBuiltInLaneCards(t *testing.T) {
 	if parsed.Columns[0].Name != "Not Now" || len(parsed.Columns[0].Cards) != 1 || parsed.Columns[0].Cards[0].Title != "Later Card" {
 		t.Fatalf("unexpected Not Now column: %#v", parsed.Columns[0])
 	}
+
 	if parsed.Columns[0].Color != "Gray" {
 		t.Fatalf("unexpected Not Now color: %#v", parsed.Columns[0])
 	}
@@ -270,6 +271,7 @@ func TestBoardView_JSON_FetchesBuiltInLaneCards(t *testing.T) {
 	if parsed.Columns[1].Name != "Maybe?" || len(parsed.Columns[1].Cards) != 1 || parsed.Columns[1].Cards[0].Title != "Maybe Card" {
 		t.Fatalf("unexpected Maybe column: %#v", parsed.Columns[1])
 	}
+
 	if parsed.Columns[1].Color != "Blue" {
 		t.Fatalf("unexpected Maybe color: %#v", parsed.Columns[1])
 	}
@@ -277,6 +279,7 @@ func TestBoardView_JSON_FetchesBuiltInLaneCards(t *testing.T) {
 	if parsed.Columns[2].Name != "Done" || len(parsed.Columns[2].Cards) != 1 || parsed.Columns[2].Cards[0].Title != "Done Card" {
 		t.Fatalf("unexpected Done column: %#v", parsed.Columns[2])
 	}
+
 	if parsed.Columns[2].Color != "Gray" {
 		t.Fatalf("unexpected Done color: %#v", parsed.Columns[2])
 	}
@@ -291,6 +294,7 @@ func TestFetchBoardViewCards_RequestsBuiltInIndexesConcurrently(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /test-account/cards", func(w http.ResponseWriter, r *http.Request) {
 		startedIndexes <- r.URL.Query().Get("indexed_by")
+
 		if started.Add(1) == 3 {
 			close(release)
 		}
@@ -310,6 +314,7 @@ func TestFetchBoardViewCards_RequestsBuiltInIndexesConcurrently(t *testing.T) {
 	defer server.Close()
 
 	client := api.NewClient(server.URL, "", "")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 
@@ -491,7 +496,7 @@ func TestBoardView_Text_KeepsCustomColumnsBeforeDone(t *testing.T) {
 	inProgress := strings.Index(result.stdout, "In Progress (0)")
 	done := strings.Index(result.stdout, "Done (0)")
 
-	if !(notNow < maybe && maybe < todo && todo < inProgress && inProgress < done) {
+	if notNow >= maybe || maybe >= todo || todo >= inProgress || inProgress >= done {
 		t.Fatalf("unexpected column order:\n%s", result.stdout)
 	}
 }

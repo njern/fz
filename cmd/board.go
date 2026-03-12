@@ -210,11 +210,10 @@ func fetchBoardViewCards(ctx context.Context, client *api.Client, slug, boardID 
 	g.SetLimit(len(indexes))
 
 	for i, index := range indexes {
-		i, index := i, index
-
 		g.Go(func() error {
 			params := url.Values{}
 			params.Add("board_ids[]", boardID)
+
 			if index != "" {
 				params.Set("indexed_by", index)
 			}
@@ -225,6 +224,7 @@ func fetchBoardViewCards(ctx context.Context, client *api.Client, slug, boardID 
 			}
 
 			results[i] = cards
+
 			return nil
 		})
 	}
@@ -234,6 +234,7 @@ func fetchBoardViewCards(ctx context.Context, client *api.Client, slug, boardID 
 	}
 
 	seen := make(map[string]struct{})
+
 	var all []api.Card
 
 	for _, cards := range results {
