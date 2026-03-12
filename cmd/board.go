@@ -13,6 +13,7 @@ import (
 	"github.com/njern/fz/internal/api"
 	"github.com/njern/fz/internal/render"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 var boardCmd = &cobra.Command{
@@ -203,21 +204,39 @@ func runBoardView(cmd *cobra.Command, args []string) error {
 
 func fetchBoardViewCards(ctx context.Context, client *api.Client, slug, boardID string) ([]api.Card, error) {
 	indexes := []string{"", "not_now", "closed"}
+	results := make([][]api.Card, len(indexes))
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(len(indexes))
+
+	for i, index := range indexes {
+		i, index := i, index
+
+		g.Go(func() error {
+			params := url.Values{}
+			params.Add("board_ids[]", boardID)
+			if index != "" {
+				params.Set("indexed_by", index)
+			}
+
+			var cards []api.Card
+			if err := client.GetAll(ctx, fmt.Sprintf("/%s/cards?%s", slug, params.Encode()), &cards); err != nil {
+				return err
+			}
+
+			results[i] = cards
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
 	seen := make(map[string]struct{})
 	var all []api.Card
 
-	for _, index := range indexes {
-		params := url.Values{}
-		params.Add("board_ids[]", boardID)
-		if index != "" {
-			params.Set("indexed_by", index)
-		}
-
-		var cards []api.Card
-		if err := client.GetAll(ctx, fmt.Sprintf("/%s/cards?%s", slug, params.Encode()), &cards); err != nil {
-			return nil, err
-		}
-
+	for _, cards := range results {
 		for _, card := range cards {
 			if _, ok := seen[card.ID]; ok {
 				continue

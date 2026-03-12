@@ -1,11 +1,17 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/njern/fz/internal/api"
 )
 
 func TestBoardList(t *testing.T) {
@@ -273,6 +279,108 @@ func TestBoardView_JSON_FetchesBuiltInLaneCards(t *testing.T) {
 	}
 	if parsed.Columns[2].Color != "Gray" {
 		t.Fatalf("unexpected Done color: %#v", parsed.Columns[2])
+	}
+}
+
+func TestFetchBoardViewCards_RequestsBuiltInIndexesConcurrently(t *testing.T) {
+	var started atomic.Int32
+
+	release := make(chan struct{})
+	startedIndexes := make(chan string, 3)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /test-account/cards", func(w http.ResponseWriter, r *http.Request) {
+		startedIndexes <- r.URL.Query().Get("indexed_by")
+		if started.Add(1) == 3 {
+			close(release)
+		}
+
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			http.Error(w, r.Context().Err().Error(), http.StatusRequestTimeout)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(cardListEmptyJSON))
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client := api.NewClient(server.URL, "", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+
+	cards, err := fetchBoardViewCards(ctx, client, "test-account", "board-1")
+	if err != nil {
+		t.Fatalf("fetchBoardViewCards: %v", err)
+	}
+
+	if len(cards) != 0 {
+		t.Fatalf("cards len = %d, want 0", len(cards))
+	}
+
+	gotIndexes := []string{<-startedIndexes, <-startedIndexes, <-startedIndexes}
+	wantCounts := map[string]int{
+		"":        1,
+		"not_now": 1,
+		"closed":  1,
+	}
+
+	for _, index := range gotIndexes {
+		wantCounts[index]--
+	}
+
+	for index, count := range wantCounts {
+		if count != 0 {
+			t.Fatalf("index %q count mismatch: remaining=%d, got=%v", index, count, gotIndexes)
+		}
+	}
+}
+
+func TestFetchBoardViewCards_PreservesIndexPriorityWhenDeduping(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /test-account/cards", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Query().Get("indexed_by") {
+		case "not_now":
+			_, _ = w.Write([]byte(`[
+			  {"id": "shared-card", "title": "Not Now Duplicate"},
+			  {"id": "not-now-card", "title": "Later Card", "postponed": true}
+			]`))
+		case "closed":
+			_, _ = w.Write([]byte(`[
+			  {"id": "shared-card", "title": "Done Duplicate", "closed": true},
+			  {"id": "done-card", "title": "Done Card", "closed": true}
+			]`))
+		default:
+			_, _ = w.Write([]byte(`[
+			  {"id": "shared-card", "title": "Maybe Card"},
+			  {"id": "maybe-card", "title": "Second Maybe Card"}
+			]`))
+		}
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client := api.NewClient(server.URL, "", "")
+
+	cards, err := fetchBoardViewCards(context.Background(), client, "test-account", "board-1")
+	if err != nil {
+		t.Fatalf("fetchBoardViewCards: %v", err)
+	}
+
+	gotTitles := []string{cards[0].Title, cards[1].Title, cards[2].Title, cards[3].Title}
+	wantTitles := []string{"Maybe Card", "Second Maybe Card", "Later Card", "Done Card"}
+
+	for i := range wantTitles {
+		if gotTitles[i] != wantTitles[i] {
+			t.Fatalf("card %d title = %q, want %q; got=%v", i, gotTitles[i], wantTitles[i], gotTitles)
+		}
 	}
 }
 
