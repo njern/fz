@@ -243,15 +243,26 @@ fz card create --help
 Common targets:
 
 ```sh
+make install-tools
 make build
+make ci
 make smoke-docs
 make test
 make lint
 make fmt
+make fix-all
 make integration-test
 ```
 
+`make install-tools` installs the pinned local developer tools used by the Makefile.
+
+`make ci` runs the deterministic checks used in GitHub Actions: linting, tests, README smoke tests, and read-only formatting/style checks.
+
 `make smoke-docs` executes the `smoke-docs` code blocks in this README in an isolated temporary home directory.
+
+`make fmt` and `make wsl` rewrite files. Use `make fmt-check` and `make wsl-check` for read-only verification.
+
+`make fix-all` applies the local fixer targets.
 
 `make integration-test` expects a working Fizzy environment with valid credentials and account access already configured. The suite may temporarily leave an unused tag behind until Fizzy's daily server-side tag cleanup runs.
 
