@@ -228,6 +228,9 @@ run_test "card unwatch" "./fz card unwatch $CARD1_NUM" "watch removed"
 # ══════════════════════════════════════════════
 echo ""
 echo "=== Phase 8: Card Tagging ==="
+# Known limitation: toggling a new tag title creates an account-level tag record.
+# Untoggling removes it from the card, but the orphaned tag may remain visible
+# until Fizzy's server-side unused-tag cleanup removes it.
 run_test "card tag" "./fz card tag $CARD1_NUM --tag '${SUFFIX}-tag'" "toggled"
 run_test "card tag (untoggle)" "./fz card tag $CARD1_NUM --tag '${SUFFIX}-tag'" "toggled"
 
