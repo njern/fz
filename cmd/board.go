@@ -257,12 +257,12 @@ func printBoardJSON(w io.Writer, board api.Board, columns []api.Column, cards []
 	var maybeCards, notNowCards, doneCards []api.Card
 
 	for _, c := range cards {
-		if c.Column != nil {
-			byColumn[c.Column.ID] = append(byColumn[c.Column.ID], c)
-		} else if c.Closed {
+		if c.Closed {
 			doneCards = append(doneCards, c)
 		} else if c.Postponed {
 			notNowCards = append(notNowCards, c)
+		} else if c.Column != nil {
+			byColumn[c.Column.ID] = append(byColumn[c.Column.ID], c)
 		} else {
 			maybeCards = append(maybeCards, c)
 		}

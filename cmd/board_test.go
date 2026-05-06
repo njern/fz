@@ -285,6 +285,68 @@ func TestBoardView_JSON_FetchesBuiltInLaneCards(t *testing.T) {
 	}
 }
 
+func TestBoardView_JSON_ClassifiesBuiltInLaneCardsBeforeCustomColumns(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /test-account/boards/board-1", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(boardViewJSON))
+	})
+	mux.HandleFunc("GET /test-account/boards/board-1/columns", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(columnListJSON))
+	})
+	mux.HandleFunc("GET /test-account/cards", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+		  {"id": "postponed-card", "number": 1, "title": "Postponed Card", "postponed": true, "column": {"id": "col-2", "name": "In Progress", "color": {"name": "Blue", "value": ""}}},
+		  {"id": "closed-card", "number": 2, "title": "Closed Card", "closed": true, "column": {"id": "col-2", "name": "In Progress", "color": {"name": "Blue", "value": ""}}},
+		  {"id": "active-card", "number": 3, "title": "Active Card", "column": {"id": "col-2", "name": "In Progress", "color": {"name": "Blue", "value": ""}}}
+		]`))
+	})
+	testEnv(t, mux)
+
+	resetFlags(t, boardViewCmd)
+
+	result := executeCommand(t, "board", "view", "board-1", "--json")
+	if result.err != nil {
+		t.Fatalf("board view --json: %v", result.err)
+	}
+
+	var parsed struct {
+		Columns []struct {
+			Name  string `json:"name"`
+			Cards []struct {
+				Title string `json:"title"`
+			} `json:"cards"`
+		} `json:"columns"`
+	}
+	if err := json.Unmarshal([]byte(result.stdout), &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, result.stdout)
+	}
+
+	cardCounts := map[string]int{}
+	cardTitles := map[string]string{}
+
+	for _, col := range parsed.Columns {
+		cardCounts[col.Name] = len(col.Cards)
+		if len(col.Cards) > 0 {
+			cardTitles[col.Name] = col.Cards[0].Title
+		}
+	}
+
+	for name, want := range map[string]int{"Not Now": 1, "In Progress": 1, "Done": 1} {
+		if cardCounts[name] != want {
+			t.Fatalf("%s card count = %d, want %d; output:\n%s", name, cardCounts[name], want, result.stdout)
+		}
+	}
+
+	for name, want := range map[string]string{"Not Now": "Postponed Card", "In Progress": "Active Card", "Done": "Closed Card"} {
+		if cardTitles[name] != want {
+			t.Fatalf("%s first card = %q, want %q; output:\n%s", name, cardTitles[name], want, result.stdout)
+		}
+	}
+}
+
 func TestFetchBoardViewCards_RequestsBuiltInIndexesConcurrently(t *testing.T) {
 	var started atomic.Int32
 
